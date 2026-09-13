@@ -1,0 +1,1609 @@
+// ============================================================
+// CENSUS 2027 - BHAWRAGURI CHARGE
+// HEAVY PROFESSIONAL HLB MONITORING + ADMIN PORTAL
+// Cloudflare Worker + D1
+//
+// COPY THIS ENTIRE FILE INTO worker.js
+//
+// REQUIRED CLOUDFLARE SETTINGS
+// 1) D1 Binding name: DB
+// 2) Secret: ADMIN_USERNAME
+// 3) Secret: ADMIN_PASSWORD
+// 4) Secret: ADMIN_SESSION_SECRET
+//
+// IMPORTANT:
+// - Final List is embedded from the supplied official Final List.
+// - Reserve List is embedded from the supplied Reserve List.
+// - Final List values are displayed read-only.
+// - Public users cannot access Admin APIs.
+// - One HLB can be submitted once per day.
+// - Next day automatically starts a new daily cycle.
+// ============================================================
+
+const TOTAL_HLB = 178;
+const TIME_ZONE = "Asia/Kolkata";
+
+// OFFICIAL FINAL LIST — DO NOT EDIT UNLESS THE OFFICIAL LIST CHANGES.
+const FINAL_LIST = [{"circle":"001","supervisor":"Deepak Mushahary","supervisor_mobile":"9101198692","enumerator":"Raju Kumar Brahma","enumerator_mobile":"9957124936","hlb":"0001","village":"Fersuabari No.1 (0001)"},{"circle":"001","supervisor":"Deepak Mushahary","supervisor_mobile":"9101198692","enumerator":"Raju Kumar Brahma","enumerator_mobile":"9957124936","hlb":"0002","village":"Fersuabari No.2 (0002)"},{"circle":"001","supervisor":"Deepak Mushahary","supervisor_mobile":"9101198692","enumerator":"Raju Kumar Brahma","enumerator_mobile":"9957124936","hlb":"0003","village":"Durabil (0003)"},{"circle":"001","supervisor":"Deepak Mushahary","supervisor_mobile":"9101198692","enumerator":"SUMIT KUMAR NARZARY","enumerator_mobile":"9101104929","hlb":"0004","village":"Gambariguri (0004)"},{"circle":"001","supervisor":"Deepak Mushahary","supervisor_mobile":"9101198692","enumerator":"BIMAL KUMAR SOREN","enumerator_mobile":"9613507376","hlb":"0005","village":"Narayanpur (0005)"},{"circle":"001","supervisor":"Deepak Mushahary","supervisor_mobile":"9101198692","enumerator":"BIMAL KUMAR SOREN","enumerator_mobile":"9613507376","hlb":"0006","village":"Simlaguri No.1 (0006)"},{"circle":"001","supervisor":"Deepak Mushahary","supervisor_mobile":"9101198692","enumerator":"BETSRANG BRAHMA","enumerator_mobile":"9577409750","hlb":"0007","village":"Simlaguri No.2 (0007)"},{"circle":"001","supervisor":"Deepak Mushahary","supervisor_mobile":"9101198692","enumerator":"BETSRANG BRAHMA","enumerator_mobile":"9577409750","hlb":"0017","village":"Narenguri (0017)"},{"circle":"001","supervisor":"Deepak Mushahary","supervisor_mobile":"9101198692","enumerator":"BETSRANG BRAHMA","enumerator_mobile":"9577409750","hlb":"0018","village":"Kaimari (0018)"},{"circle":"001","supervisor":"Deepak Mushahary","supervisor_mobile":"9101198692","enumerator":"MAYA KUMAR BRAHMA","enumerator_mobile":"9365023474","hlb":"0008","village":"Gambaribil (0008)"},{"circle":"001","supervisor":"Deepak Mushahary","supervisor_mobile":"9101198692","enumerator":"DWIMALU NARZARY","enumerator_mobile":"8638692213","hlb":"0009","village":"Sinsilabari (0009)"},{"circle":"001","supervisor":"Deepak Mushahary","supervisor_mobile":"9101198692","enumerator":"DWIMALU NARZARY","enumerator_mobile":"8638692213","hlb":"0010","village":"Mukuldang  No 1 (0010)"},{"circle":"001","supervisor":"Deepak Mushahary","supervisor_mobile":"9101198692","enumerator":"DWIMALU NARZARY","enumerator_mobile":"8638692213","hlb":"0016","village":"Mukuldang  No 2 (0016)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"Laxman Brahma","enumerator_mobile":"9954943942","hlb":"0011","village":"Surjyakhata (0011)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"Laxman Brahma","enumerator_mobile":"9954943942","hlb":"0012","village":"Dakhin Mukuldang (0012)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"Laxman Brahma","enumerator_mobile":"9954943942","hlb":"0013","village":"Pachim Mukuldang (0013)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"Laxman Brahma","enumerator_mobile":"9954943942","hlb":"0020","village":"Mukuldang (0020)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"UTTAM BASUMATARY","enumerator_mobile":"7002206587","hlb":"0014","village":"Uttar Soulmari (0014)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"UTTAM BASUMATARY","enumerator_mobile":"7002206587","hlb":"0015","village":"Dakhin Kaimari (0015)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"JAPENDRA BASUMATARY","enumerator_mobile":"8486969256","hlb":"0019","village":"Soulmari (0019)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"JAPENDRA BASUMATARY","enumerator_mobile":"8486969256","hlb":"0023","village":"No.2 Chekadani (0023)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"Mijing Brahma","enumerator_mobile":"8135951234","hlb":"0021","village":"No.1 Chekadani (0021)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"Mijing Brahma","enumerator_mobile":"8135951234","hlb":"0022","village":"Alengmari (0022)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"MANIK SWARGIARY","enumerator_mobile":"7002135895","hlb":"0024","village":"Kamansing (0024)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"MANIK SWARGIARY","enumerator_mobile":"7002135895","hlb":"0025","village":"Purba Kamalsing (0025)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"KAUSHIK BRAHMA","enumerator_mobile":"6901913520","hlb":"0026","village":"Patakata (0026)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"KAUSHIK BRAHMA","enumerator_mobile":"6901913520","hlb":"0033","village":"Dakhin Patakata (0031)"},{"circle":"002","supervisor":"DHANESH BORO","supervisor_mobile":"8876440519","enumerator":"KAUSHIK BRAHMA","enumerator_mobile":"6901913520","hlb":"0045","village":"Nutunpara (0039)"},{"circle":"003","supervisor":"Anthony Daimary","supervisor_mobile":"8486231473","enumerator":"AFSAR ALI","enumerator_mobile":"8011893767","hlb":"0031","village":"Dangaimara (0029)"},{"circle":"003","supervisor":"Anthony Daimary","supervisor_mobile":"8486231473","enumerator":"AFSAR ALI","enumerator_mobile":"8011893767","hlb":"0054","village":"Boalimari (0043)"},{"circle":"003","supervisor":"Anthony Daimary","supervisor_mobile":"8486231473","enumerator":"SHAJIB MUSHAHARY","enumerator_mobile":"9101572694","hlb":"0030","village":"Ai-Bhandar Pt.-I (0028)"},{"circle":"003","supervisor":"Anthony Daimary","supervisor_mobile":"8486231473","enumerator":"RAFIQUL ISLAM SHEIKH","enumerator_mobile":"8876761493","hlb":"0034","village":"Ai-Bhandar Pt.-Ii (0032)"},{"circle":"003","supervisor":"Anthony Daimary","supervisor_mobile":"8486231473","enumerator":"KOUSHIK BHARALI","enumerator_mobile":"8761048971","hlb":"0027","village":"Musalmanpara (0027)"},{"circle":"003","supervisor":"Anthony Daimary","supervisor_mobile":"8486231473","enumerator":"NABAJIT SUTRADHAR","enumerator_mobile":"9706859377","hlb":"0028","village":"Musalmanpara (0027)"},{"circle":"003","supervisor":"Anthony Daimary","supervisor_mobile":"8486231473","enumerator":"Bijay Kumar Roy","enumerator_mobile":"9706909907","hlb":"0029","village":"Musalmanpara (0027)"},{"circle":"004","supervisor":"RAJU NARZARY","supervisor_mobile":"9365885996","enumerator":"Chandan Sutradhar","enumerator_mobile":"9707768998","hlb":"0037","village":"Dakhin Musalmanpara Pt.-I (0034)"},{"circle":"004","supervisor":"RAJU NARZARY","supervisor_mobile":"9365885996","enumerator":"Md Anser Ali Ahmed","enumerator_mobile":"9954184315","hlb":"0035","village":"Dakhin Musalmanpara Pt.-Ii (0033)"},{"circle":"004","supervisor":"RAJU NARZARY","supervisor_mobile":"9365885996","enumerator":"REJAUL ISLAM AHMED","enumerator_mobile":"9101294562","hlb":"0036","village":"Dakhin Musalmanpara Pt.-Ii (0033)"},{"circle":"004","supervisor":"RAJU NARZARY","supervisor_mobile":"9365885996","enumerator":"Ramesh Barman","enumerator_mobile":"7002491385","hlb":"0038","village":"Mowamari (0035)"},{"circle":"004","supervisor":"RAJU NARZARY","supervisor_mobile":"9365885996","enumerator":"Sailendra Chandra Barman","enumerator_mobile":"9954492153","hlb":"0039","village":"Mowamari (0035)"},{"circle":"005","supervisor":"Augustine Basumatary","supervisor_mobile":"9101149266","enumerator":"Jaynath Gayary","enumerator_mobile":"9954485199","hlb":"0082","village":"Kholisanimari (0056)"},{"circle":"005","supervisor":"Augustine Basumatary","supervisor_mobile":"9101149266","enumerator":"SUMAN GHOSH","enumerator_mobile":"9957813102","hlb":"0083","village":"Kholisanimari (0056)"},{"circle":"005","supervisor":"Augustine Basumatary","supervisor_mobile":"9101149266","enumerator":"BISWADEEP ROY","enumerator_mobile":"9706884243","hlb":"0084","village":"Kholisanimari (0056)"},{"circle":"005","supervisor":"Augustine Basumatary","supervisor_mobile":"9101149266","enumerator":"Shoriful Alom","enumerator_mobile":"9954655752","hlb":"0040","village":"Kursamari (0036)"},{"circle":"005","supervisor":"Augustine Basumatary","supervisor_mobile":"9101149266","enumerator":"Vikash Kumar Sharma","enumerator_mobile":"9365183470","hlb":"0032","village":"Pachim Dangaimara (0030)"},{"circle":"006","supervisor":"Shekhar Podder","supervisor_mobile":"9864299208","enumerator":"Subhamay Paul","enumerator_mobile":"8638336210","hlb":"0046","village":"Bhawraguri Baruapara Pt.-I (0040)"},{"circle":"006","supervisor":"Shekhar Podder","supervisor_mobile":"9864299208","enumerator":"RAKESH PAUL","enumerator_mobile":"9401499594","hlb":"0047","village":"Bhawraguri Baruapara Pt.-I (0040)"},{"circle":"006","supervisor":"Shekhar Podder","supervisor_mobile":"9864299208","enumerator":"BIPUL DAS","enumerator_mobile":"9435644849","hlb":"0048","village":"Bhawraguri Baruapara Pt.-I (0040)"},{"circle":"006","supervisor":"Shekhar Podder","supervisor_mobile":"9864299208","enumerator":"Madhu Sudhan Barman","enumerator_mobile":"9101766640","hlb":"0049","village":"Bhawraguri Baruapara Pt.-Ii (0041)"},{"circle":"006","supervisor":"Shekhar Podder","supervisor_mobile":"9864299208","enumerator":"Bijal Sarkar","enumerator_mobile":"9957925615","hlb":"0050","village":"Bhawraguri Baruapara Pt.-Ii (0041)"},{"circle":"006","supervisor":"Shekhar Podder","supervisor_mobile":"9864299208","enumerator":"Shah Kamal Sheikh","enumerator_mobile":"9954643168","hlb":"0051","village":"Bhawraguri Baruapara Pt.-Ii (0041)"},{"circle":"007","supervisor":"RAFIQUL ISLAM MONDAL","supervisor_mobile":"9954549900","enumerator":"RABIUL ISLAM","enumerator_mobile":"9957687890","hlb":"0056","village":"Bhowraguri Mandalpara (0045)"},{"circle":"007","supervisor":"RAFIQUL ISLAM MONDAL","supervisor_mobile":"9954549900","enumerator":"Shovan Lal Choudhury","enumerator_mobile":"7002045933","hlb":"0057","village":"Bhowraguri Mandalpara (0045)"},{"circle":"007","supervisor":"RAFIQUL ISLAM MONDAL","supervisor_mobile":"9954549900","enumerator":"Golam Sorowar Rahman","enumerator_mobile":"9954233008","hlb":"0058","village":"Bhowraguri Mandalpara (0045)"},{"circle":"007","supervisor":"RAFIQUL ISLAM MONDAL","supervisor_mobile":"9954549900","enumerator":"JAHID HASSAN MONDAL","enumerator_mobile":"7896986410","hlb":"0055","village":"Patialpara Mohendrapur (0044)"},{"circle":"007","supervisor":"RAFIQUL ISLAM MONDAL","supervisor_mobile":"9954549900","enumerator":"SHOAIB AKTAR","enumerator_mobile":"8135904546","hlb":"0042","village":"Tokeamari-Ii (0038)"},{"circle":"007","supervisor":"RAFIQUL ISLAM MONDAL","supervisor_mobile":"9954549900","enumerator":"ANANDA MOHAN ADHIKARY","enumerator_mobile":"9954871382","hlb":"0043","village":"Tokeamari-Ii (0038)"},{"circle":"007","supervisor":"RAFIQUL ISLAM MONDAL","supervisor_mobile":"9954549900","enumerator":"BHASKAR SUTRADHAR","enumerator_mobile":"7002260774","hlb":"0044","village":"Tokeamari-Ii (0038)"},{"circle":"008","supervisor":"UDAY SING NARZARY","supervisor_mobile":"9864211719","enumerator":"HIJIRUL ISLAM","enumerator_mobile":"8638886413","hlb":"0041","village":"Tokeamari-I (0037)"},{"circle":"008","supervisor":"UDAY SING NARZARY","supervisor_mobile":"9864211719","enumerator":"Manoj Kumar Ray","enumerator_mobile":"8876134572","hlb":"0067","village":"Tajpur (0050)"},{"circle":"008","supervisor":"UDAY SING NARZARY","supervisor_mobile":"9864211719","enumerator":"NILRATAN SARKAR","enumerator_mobile":"6001958880","hlb":"0068","village":"Tajpur (0050)"},{"circle":"008","supervisor":"UDAY SING NARZARY","supervisor_mobile":"9864211719","enumerator":"IKRAMUL HOQUE","enumerator_mobile":"9678744151","hlb":"0060","village":"Hongshibil (0047)"},{"circle":"008","supervisor":"UDAY SING NARZARY","supervisor_mobile":"9864211719","enumerator":"Basir Uddin Sikdar","enumerator_mobile":"9954848646","hlb":"0061","village":"Hongshibil (0047)"},{"circle":"008","supervisor":"UDAY SING NARZARY","supervisor_mobile":"9864211719","enumerator":"MANNAF ALI BEPARI","enumerator_mobile":"9859985139","hlb":"0062","village":"Hongshibil (0047)"},{"circle":"009","supervisor":"MUZAHIDUL ISLAM SK","supervisor_mobile":"9706738153","enumerator":"Mahesh Debnath","enumerator_mobile":"7002181331","hlb":"0059","village":"Ghonapara (0046)"},{"circle":"009","supervisor":"MUZAHIDUL ISLAM SK","supervisor_mobile":"9706738153","enumerator":"Biswajit Saha","enumerator_mobile":"8486476414","hlb":"0073","village":"Patialpara Ahmedpur (0052)"},{"circle":"009","supervisor":"MUZAHIDUL ISLAM SK","supervisor_mobile":"9706738153","enumerator":"NUR HUSSAIN MONDAL","enumerator_mobile":"8812861411","hlb":"0074","village":"Patialpara Ahmedpur (0052)"},{"circle":"009","supervisor":"MUZAHIDUL ISLAM SK","supervisor_mobile":"9706738153","enumerator":"EMDADUR RAHMAN","enumerator_mobile":"9678045085","hlb":"0075","village":"Patialpara Ahmedpur (0052)"},{"circle":"009","supervisor":"MUZAHIDUL ISLAM SK","supervisor_mobile":"9706738153","enumerator":"ASHIT RANJAN PAUL","enumerator_mobile":"9401461028","hlb":"0052","village":"Patialpara (0042)"},{"circle":"009","supervisor":"MUZAHIDUL ISLAM SK","supervisor_mobile":"9706738153","enumerator":"MONIRUZ ZAMAN","enumerator_mobile":"8638362264","hlb":"0053","village":"Patialpara (0042)"},{"circle":"009","supervisor":"MUZAHIDUL ISLAM SK","supervisor_mobile":"9706738153","enumerator":"Bakul Ch Barman","enumerator_mobile":"9101297763","hlb":"0076","village":"Rupshi Pt.-I (0053)"},{"circle":"010","supervisor":"Dhrubajit Narzary","supervisor_mobile":"7002047398","enumerator":"Anowar Hussain Mandal","enumerator_mobile":"6002532552","hlb":"0097","village":"Rupshi Pt.-Ii (0062)"},{"circle":"010","supervisor":"Dhrubajit Narzary","supervisor_mobile":"7002047398","enumerator":"Noor Wadood Hossain","enumerator_mobile":"8011502922","hlb":"0098","village":"Rupshi Pt.-Ii (0062)"},{"circle":"010","supervisor":"Dhrubajit Narzary","supervisor_mobile":"7002047398","enumerator":"Shahadat Hussain","enumerator_mobile":"9678143996","hlb":"0099","village":"Rupshi Pt.-Ii (0062)"},{"circle":"010","supervisor":"Dhrubajit Narzary","supervisor_mobile":"7002047398","enumerator":"SAJAL DEY","enumerator_mobile":"8402819137","hlb":"0077","village":"Ushatari (0054)"},{"circle":"010","supervisor":"Dhrubajit Narzary","supervisor_mobile":"7002047398","enumerator":"Iman Ali Pramanik","enumerator_mobile":"9365269850","hlb":"0078","village":"Ushatari (0054)"},{"circle":"010","supervisor":"Dhrubajit Narzary","supervisor_mobile":"7002047398","enumerator":"MD ABDUL HAKIM","enumerator_mobile":"7896564070","hlb":"0079","village":"Ushatari (0054)"},{"circle":"010","supervisor":"Dhrubajit Narzary","supervisor_mobile":"7002047398","enumerator":"SUBHENDU BHOWMICK","enumerator_mobile":"9706558854","hlb":"0080","village":"Ushatari (0054)"},{"circle":"011","supervisor":"BARUN CH. BARMAN","supervisor_mobile":"8133052855","enumerator":"KARNA  MUCHAHARY","enumerator_mobile":"8761098130","hlb":"0085","village":"Choutara (0057)"},{"circle":"011","supervisor":"BARUN CH. BARMAN","supervisor_mobile":"8133052855","enumerator":"BIDINTA  BASUMATARY","enumerator_mobile":"9387987943","hlb":"0086","village":"Choutara (0057)"},{"circle":"011","supervisor":"BARUN CH. BARMAN","supervisor_mobile":"8133052855","enumerator":"Nabajyoti Roy","enumerator_mobile":"9957778392","hlb":"0087","village":"Choutara (0057)"},{"circle":"011","supervisor":"BARUN CH. BARMAN","supervisor_mobile":"8133052855","enumerator":"TAHER ALI","enumerator_mobile":"8638391254","hlb":"0094","village":"Boalkamari (0060)"},{"circle":"011","supervisor":"BARUN CH. BARMAN","supervisor_mobile":"8133052855","enumerator":"Pabitra  Basumatary","enumerator_mobile":"9957712701","hlb":"0095","village":"Boalkamari (0060)"},{"circle":"011","supervisor":"BARUN CH. BARMAN","supervisor_mobile":"8133052855","enumerator":"Pabitra  Basumatary","enumerator_mobile":"9957712701","hlb":"0081","village":"Aminkata (0055)"},{"circle":"011","supervisor":"BARUN CH. BARMAN","supervisor_mobile":"8133052855","enumerator":"CHAITANYA  ROY","enumerator_mobile":"8011177832","hlb":"0134","village":"Kusumbil Pt.-Ii (0073)"},{"circle":"011","supervisor":"BARUN CH. BARMAN","supervisor_mobile":"8133052855","enumerator":"CHAITANYA  ROY","enumerator_mobile":"8011177832","hlb":"0135","village":"Kusumbil Pt.-I (0074)"},{"circle":"012","supervisor":"Ram Murmu","supervisor_mobile":"8876440515","enumerator":"Abdus Sabur Mandal","enumerator_mobile":"9957356180","hlb":"0088","village":"Kusumbil Pt.-I (0074)"},{"circle":"012","supervisor":"Ram Murmu","supervisor_mobile":"8876440515","enumerator":"Md Habibar Rahman Mandal","enumerator_mobile":"8486499692","hlb":"0089","village":"Kusumbil Pt.-I (0074)"},{"circle":"012","supervisor":"Ram Murmu","supervisor_mobile":"8876440515","enumerator":"Sabbir Ali Sheikh","enumerator_mobile":"6002873642","hlb":"0090","village":"Kusumbil Pt.-I (0074)"},{"circle":"012","supervisor":"Ram Murmu","supervisor_mobile":"8876440515","enumerator":"Maniruz Zaman Mandal","enumerator_mobile":"8638027661","hlb":"0091","village":"Kusumbil Pt.-I (0074)"},{"circle":"012","supervisor":"Ram Murmu","supervisor_mobile":"8876440515","enumerator":"Galak Ch. Brahma","enumerator_mobile":"9957042180","hlb":"0092","village":"Bhobanichora (0059)"},{"circle":"012","supervisor":"Ram Murmu","supervisor_mobile":"8876440515","enumerator":"Utpal Dey","enumerator_mobile":"8876277157","hlb":"0093","village":"Bhobanichora (0059)"},{"circle":"013","supervisor":"Pulukesh Roy","supervisor_mobile":"7002580281","enumerator":"MD SAMIUL HOQUE","enumerator_mobile":"9957498305","hlb":"0096","village":"Tulsibil (0061)"},{"circle":"013","supervisor":"Pulukesh Roy","supervisor_mobile":"7002580281","enumerator":"ANKUR JYOTI ROY PRIYA","enumerator_mobile":"9101663996","hlb":"0128","village":"Joypur (0071)"},{"circle":"013","supervisor":"Pulukesh Roy","supervisor_mobile":"7002580281","enumerator":"MD NAZRUL HOQUE","enumerator_mobile":"9954185966","hlb":"0129","village":"Joypur (0071)"},{"circle":"013","supervisor":"Pulukesh Roy","supervisor_mobile":"7002580281","enumerator":"Ratan Kr Sarma","enumerator_mobile":"9864728879","hlb":"0130","village":"Joypur (0071)"},{"circle":"013","supervisor":"Pulukesh Roy","supervisor_mobile":"7002580281","enumerator":"Krishna Kr. Das","enumerator_mobile":"7002815009","hlb":"0131","village":"Joypur (0071)"},{"circle":"013","supervisor":"Pulukesh Roy","supervisor_mobile":"7002580281","enumerator":"AHIS UDDIN SK","enumerator_mobile":"8822716567","hlb":"0141","village":"Silbari (0079)"},{"circle":"013","supervisor":"Pulukesh Roy","supervisor_mobile":"7002580281","enumerator":"Hareswar Barman","enumerator_mobile":"8011889693","hlb":"0142","village":"Silbari (0079)"},{"circle":"014","supervisor":"Gossai Goyari","supervisor_mobile":"9706948472","enumerator":"Md.Mizanur Rahman","enumerator_mobile":"9101102133","hlb":"0100","village":"Tengnarbhita (0063)"},{"circle":"014","supervisor":"Gossai Goyari","supervisor_mobile":"9706948472","enumerator":"Md.Manzur Ali","enumerator_mobile":"7002464153","hlb":"0101","village":"Tengnarbhita (0063)"},{"circle":"014","supervisor":"Gossai Goyari","supervisor_mobile":"9706948472","enumerator":"Asadul Alom","enumerator_mobile":"8638668567","hlb":"0102","village":"Tengnarbhita (0063)"},{"circle":"014","supervisor":"Gossai Goyari","supervisor_mobile":"9706948472","enumerator":"Nur Bakta Sheikh","enumerator_mobile":"9508032477","hlb":"0103","village":"Tengnarbhita (0063)"},{"circle":"014","supervisor":"Gossai Goyari","supervisor_mobile":"9706948472","enumerator":"Md.Motier Rahman","enumerator_mobile":"8134855626","hlb":"0104","village":"Tengnarbhita (0063)"},{"circle":"014","supervisor":"Gossai Goyari","supervisor_mobile":"9706948472","enumerator":"NAZRUL  ISLAM","enumerator_mobile":"9954574734","hlb":"0105","village":"Tengnarbhita (0063)"},{"circle":"014","supervisor":"Gossai Goyari","supervisor_mobile":"9706948472","enumerator":"Zakir Hussain","enumerator_mobile":"8011176815","hlb":"0106","village":"Tengnarbhita (0063)"},{"circle":"014","supervisor":"Gossai Goyari","supervisor_mobile":"9706948472","enumerator":"Nasir Uddin Sikdar","enumerator_mobile":"8011880936","hlb":"0107","village":"Tengnarbhita (0063)"},{"circle":"015","supervisor":"RAJESWAR BRAHMA","supervisor_mobile":"9678525998","enumerator":"Abdul Latif","enumerator_mobile":"7896832797","hlb":"0069","village":"Mokrambil (0051)"},{"circle":"015","supervisor":"RAJESWAR BRAHMA","supervisor_mobile":"9678525998","enumerator":"Gopal Kumar Barman","enumerator_mobile":"8133053134","hlb":"0070","village":"Mokrambil (0051)"},{"circle":"015","supervisor":"RAJESWAR BRAHMA","supervisor_mobile":"9678525998","enumerator":"PRASANTA KUMAR BARMAN","enumerator_mobile":"9864728742","hlb":"0071","village":"Mokrambil (0051)"},{"circle":"015","supervisor":"RAJESWAR BRAHMA","supervisor_mobile":"9678525998","enumerator":"Yunus Ali","enumerator_mobile":"6001350729","hlb":"0072","village":"Mokrambil (0051)"},{"circle":"015","supervisor":"RAJESWAR BRAHMA","supervisor_mobile":"9678525998","enumerator":"Zahangir Alom Sk","enumerator_mobile":"9678373266","hlb":"0108","village":"Panijani Pt.-I (0064)"},{"circle":"015","supervisor":"RAJESWAR BRAHMA","supervisor_mobile":"9678525998","enumerator":"Md Monowar Hussain","enumerator_mobile":"8011540767","hlb":"0109","village":"Panijani Pt.-I (0064)"},{"circle":"016","supervisor":"IRAGDAO NARZARY","supervisor_mobile":"8638902970","enumerator":"Subir Sarkar","enumerator_mobile":"8011410908","hlb":"0065","village":"Banglabari (0049)"},{"circle":"016","supervisor":"IRAGDAO NARZARY","supervisor_mobile":"8638902970","enumerator":"Md Moinul Hoque","enumerator_mobile":"8486866782","hlb":"0066","village":"Banglabari (0049)"},{"circle":"016","supervisor":"IRAGDAO NARZARY","supervisor_mobile":"8638902970","enumerator":"Md Moinul Hoque","enumerator_mobile":"8486866782","hlb":"0063","village":"Chakma (0048)"},{"circle":"016","supervisor":"IRAGDAO NARZARY","supervisor_mobile":"8638902970","enumerator":"Md Mozibar Rahman","enumerator_mobile":"7086767787","hlb":"0064","village":"Chakma (0048)"},{"circle":"016","supervisor":"IRAGDAO NARZARY","supervisor_mobile":"8638902970","enumerator":"DHANJIT NARZARY","enumerator_mobile":"8011632922","hlb":"0114","village":"Kochugaon (0066)"},{"circle":"016","supervisor":"IRAGDAO NARZARY","supervisor_mobile":"8638902970","enumerator":"DHANJIT NARZARY","enumerator_mobile":"8011632922","hlb":"0115","village":"Somaijhora (0067)"},{"circle":"016","supervisor":"IRAGDAO NARZARY","supervisor_mobile":"8638902970","enumerator":"Rahim Boksho Ahmed","enumerator_mobile":"9678767820","hlb":"0112","village":"Bhumka (0065)"},{"circle":"016","supervisor":"IRAGDAO NARZARY","supervisor_mobile":"8638902970","enumerator":"MD ROSNAI Ali","enumerator_mobile":"9678289860","hlb":"0113","village":"Bhumka (0065)"},{"circle":"016","supervisor":"IRAGDAO NARZARY","supervisor_mobile":"8638902970","enumerator":"MD ROSNAI Ali","enumerator_mobile":"9678289860","hlb":"0116","village":"Panijani Pt.-Ii (0068)"},{"circle":"017","supervisor":"AMIR HOSSAIN","supervisor_mobile":"9101565436","enumerator":"ABU TAHER MOLLAH","enumerator_mobile":"8011020467","hlb":"0110","village":"Panijani Pt.-I (0064)"},{"circle":"017","supervisor":"AMIR HOSSAIN","supervisor_mobile":"9101565436","enumerator":"Md.Akbar Ali Sheikh","enumerator_mobile":"9954512853","hlb":"0111","village":"Panijani Pt.-I (0064)"},{"circle":"017","supervisor":"AMIR HOSSAIN","supervisor_mobile":"9101565436","enumerator":"MD MOTIAR RAHMAN","enumerator_mobile":"8011332434","hlb":"0124","village":"Kumguri (0070)"},{"circle":"017","supervisor":"AMIR HOSSAIN","supervisor_mobile":"9101565436","enumerator":"ZAKIR  HUSSAIN","enumerator_mobile":"9678483610","hlb":"0125","village":"Kumguri (0070)"},{"circle":"017","supervisor":"AMIR HOSSAIN","supervisor_mobile":"9101565436","enumerator":"MEHER  ZAMAL","enumerator_mobile":"9395249152","hlb":"0126","village":"Kumguri (0070)"},{"circle":"017","supervisor":"AMIR HOSSAIN","supervisor_mobile":"9101565436","enumerator":"Nur Alom Pramanik","enumerator_mobile":"6000024317","hlb":"0127","village":"Kumguri (0070)"},{"circle":"018","supervisor":"NAZIBUL HASSAN","supervisor_mobile":"9401603705","enumerator":"ABDUL MANNAN MONDAL","enumerator_mobile":"7002549879","hlb":"0132","village":"Jogirbhata (0072)"},{"circle":"018","supervisor":"NAZIBUL HASSAN","supervisor_mobile":"9401603705","enumerator":"DULAL ROY","enumerator_mobile":"7896936076","hlb":"0133","village":"Jogirbhata (0072)"},{"circle":"018","supervisor":"NAZIBUL HASSAN","supervisor_mobile":"9401603705","enumerator":"DULAL ROY","enumerator_mobile":"7896936076","hlb":"0140","village":"Basirchar (0078)"},{"circle":"018","supervisor":"NAZIBUL HASSAN","supervisor_mobile":"9401603705","enumerator":"NILRATAN CHANDRA BARMAN","enumerator_mobile":"9864765843","hlb":"0138","village":"Rimijhimighat Pt.I (0076)"},{"circle":"018","supervisor":"NAZIBUL HASSAN","supervisor_mobile":"9401603705","enumerator":"RUBUL ISLAM AHMED","enumerator_mobile":"8638161552","hlb":"0139","village":"Rimijhimighat Pt.Ii (0077)"},{"circle":"018","supervisor":"NAZIBUL HASSAN","supervisor_mobile":"9401603705","enumerator":"Mahiruddin Bhuyan","enumerator_mobile":"9954799764","hlb":"0136","village":"Rimijhimi Ghop (0075)"},{"circle":"018","supervisor":"NAZIBUL HASSAN","supervisor_mobile":"9401603705","enumerator":"SAHIDUR RAHMAN AKAND","enumerator_mobile":"8638912154","hlb":"0137","village":"Rimijhimi Ghop (0075)"},{"circle":"019","supervisor":"Biswajit Roy","supervisor_mobile":"9957442250","enumerator":"Prasanta Kr. Barman","enumerator_mobile":"6000202197","hlb":"0168","village":"Palashkandi (0094)"},{"circle":"019","supervisor":"Biswajit Roy","supervisor_mobile":"9957442250","enumerator":"Prasanta Kr. Barman","enumerator_mobile":"6000202197","hlb":"0166","village":"Ghutihara (0092)"},{"circle":"019","supervisor":"Biswajit Roy","supervisor_mobile":"9957442250","enumerator":"TALEMUL ISLAM","enumerator_mobile":"8822983045","hlb":"0169","village":"Faluguri (0095)"},{"circle":"019","supervisor":"Biswajit Roy","supervisor_mobile":"9957442250","enumerator":"SANJAY SAHA","enumerator_mobile":"9678045077","hlb":"0170","village":"Faluguri (0095)"},{"circle":"019","supervisor":"Biswajit Roy","supervisor_mobile":"9957442250","enumerator":"NAYAN MAHANAYAK","enumerator_mobile":"8638106320","hlb":"0163","village":"Kunjadoba (0089)"},{"circle":"019","supervisor":"Biswajit Roy","supervisor_mobile":"9957442250","enumerator":"NAYAN MAHANAYAK","enumerator_mobile":"8638106320","hlb":"0164","village":"Patimari (0090)"},{"circle":"019","supervisor":"Biswajit Roy","supervisor_mobile":"9957442250","enumerator":"SULTAN ALI AHMED","enumerator_mobile":"9957528354","hlb":"0143","village":"Khuriabari (0080)"},{"circle":"019","supervisor":"Biswajit Roy","supervisor_mobile":"9957442250","enumerator":"PAPU  SAIKIA","enumerator_mobile":"8638088164","hlb":"0144","village":"Khuriabari (0080)"},{"circle":"019","supervisor":"Biswajit Roy","supervisor_mobile":"9957442250","enumerator":"PAPU  SAIKIA","enumerator_mobile":"8638088164","hlb":"0165","village":"Hashdoha (0091)"},{"circle":"020","supervisor":"KUSUM BASUMATARY","supervisor_mobile":"9101350918","enumerator":"MD JAHIRUL ISLAM SHEIKH","enumerator_mobile":"7002262813","hlb":"0117","village":"Gossaigaon (0069)"},{"circle":"020","supervisor":"KUSUM BASUMATARY","supervisor_mobile":"9101350918","enumerator":"Nur Amin Akand","enumerator_mobile":"7086635633","hlb":"0118","village":"Gossaigaon (0069)"},{"circle":"020","supervisor":"KUSUM BASUMATARY","supervisor_mobile":"9101350918","enumerator":"NEWTON  RAJBONGSHI","enumerator_mobile":"7002906817","hlb":"0119","village":"Gossaigaon (0069)"},{"circle":"020","supervisor":"KUSUM BASUMATARY","supervisor_mobile":"9101350918","enumerator":"BISWANATH  PONDIT","enumerator_mobile":"9435127504","hlb":"0120","village":"Gossaigaon (0069)"},{"circle":"020","supervisor":"KUSUM BASUMATARY","supervisor_mobile":"9101350918","enumerator":"NURUL  HOQUE","enumerator_mobile":"7896394299","hlb":"0121","village":"Gossaigaon (0069)"},{"circle":"020","supervisor":"KUSUM BASUMATARY","supervisor_mobile":"9101350918","enumerator":"AJBAHAR  SK","enumerator_mobile":"8134053156","hlb":"0122","village":"Gossaigaon (0069)"},{"circle":"020","supervisor":"KUSUM BASUMATARY","supervisor_mobile":"9101350918","enumerator":"MD HAFIZUR RAHAMAN","enumerator_mobile":"8011048601","hlb":"0123","village":"Gossaigaon (0069)"},{"circle":"021","supervisor":"MANABENDRA ROY","supervisor_mobile":"7896792782","enumerator":"MOZIAL HOQUE MOLLAH","enumerator_mobile":"9707607890","hlb":"0149","village":"Harbhanga (0083)"},{"circle":"021","supervisor":"MANABENDRA ROY","supervisor_mobile":"7896792782","enumerator":"MD SHAHANUR  HOQUE","enumerator_mobile":"7086328183","hlb":"0150","village":"Harbhanga (0083)"},{"circle":"021","supervisor":"MANABENDRA ROY","supervisor_mobile":"7896792782","enumerator":"BISWAJIT  PAUL","enumerator_mobile":"7002424842","hlb":"0147","village":"Jamunatari (0082)"},{"circle":"021","supervisor":"MANABENDRA ROY","supervisor_mobile":"7896792782","enumerator":"RABIUL AWAL","enumerator_mobile":"9957408579","hlb":"0148","village":"Jamunatari (0082)"},{"circle":"021","supervisor":"MANABENDRA ROY","supervisor_mobile":"7896792782","enumerator":"PRANAB KUNDU","enumerator_mobile":"6002749003","hlb":"0145","village":"Halghora (0081)"},{"circle":"021","supervisor":"MANABENDRA ROY","supervisor_mobile":"7896792782","enumerator":"JITEN CH. SAHA","enumerator_mobile":"6002572064","hlb":"0146","village":"Halghora (0081)"},{"circle":"022","supervisor":"BIKRAM NARZARY","supervisor_mobile":"9957668384","enumerator":"JITEN ROY","enumerator_mobile":"8011473435","hlb":"0167","village":"Bodla (0093)"},{"circle":"022","supervisor":"BIKRAM NARZARY","supervisor_mobile":"9957668384","enumerator":"SUBRATA SARKAR","enumerator_mobile":"9678306483","hlb":"0173","village":"Kartaymari Pt.-I (0097)"},{"circle":"022","supervisor":"BIKRAM NARZARY","supervisor_mobile":"9957668384","enumerator":"Nashiruddin Sheikh","enumerator_mobile":"9864497154","hlb":"0162","village":"Kartaymari Pt.-Ii (0088)"},{"circle":"022","supervisor":"BIKRAM NARZARY","supervisor_mobile":"9957668384","enumerator":"GOLAP ALI MONDAL","enumerator_mobile":"9859471642","hlb":"0160","village":"Asharikandi (0087)"},{"circle":"022","supervisor":"BIKRAM NARZARY","supervisor_mobile":"9957668384","enumerator":"Champak Barman","enumerator_mobile":"9859100920","hlb":"0161","village":"Asharikandi (0087)"},{"circle":"023","supervisor":"DIPAK KUMAR ROY","supervisor_mobile":"9085715427","enumerator":"JOYNAL  ABEDIN","enumerator_mobile":"9954801741","hlb":"0155","village":"Balapara Pt.-I (0086)"},{"circle":"023","supervisor":"DIPAK KUMAR ROY","supervisor_mobile":"9085715427","enumerator":"Ranojit Singha Barman","enumerator_mobile":"8876990401","hlb":"0156","village":"Balapara Pt.-I (0086)"},{"circle":"023","supervisor":"DIPAK KUMAR ROY","supervisor_mobile":"9085715427","enumerator":"Sahirul Islam","enumerator_mobile":"7002432776","hlb":"0157","village":"Balapara Pt.-I (0086)"},{"circle":"023","supervisor":"DIPAK KUMAR ROY","supervisor_mobile":"9085715427","enumerator":"Ramjan Ali","enumerator_mobile":"6003461399","hlb":"0158","village":"Balapara Pt.-I (0086)"},{"circle":"023","supervisor":"DIPAK KUMAR ROY","supervisor_mobile":"9085715427","enumerator":"Mizanur Rahman","enumerator_mobile":"8638180166","hlb":"0159","village":"Balapara Pt.-I (0086)"},{"circle":"024","supervisor":"HAFIZ MD. ABDUL JALIL","supervisor_mobile":"7399163520","enumerator":"Sayed Alamin Sheikh","enumerator_mobile":"8638304920","hlb":"0152","village":"Balapara Pt.-Ii (0085)"},{"circle":"024","supervisor":"HAFIZ MD. ABDUL JALIL","supervisor_mobile":"7399163520","enumerator":"Mamataj Begum","enumerator_mobile":"8876478872","hlb":"0153","village":"Balapara Pt.-Ii (0085)"},{"circle":"024","supervisor":"HAFIZ MD. ABDUL JALIL","supervisor_mobile":"7399163520","enumerator":"Manoj Kumar Nath","enumerator_mobile":"9365856541","hlb":"0154","village":"Balapara Pt.-Ii (0085)"},{"circle":"024","supervisor":"HAFIZ MD. ABDUL JALIL","supervisor_mobile":"7399163520","enumerator":"Manoj Kumar Nath","enumerator_mobile":"9365856541","hlb":"0151","village":"Balapara Saljhar (0084)"},{"circle":"025","supervisor":"Prasanta Kumar Narzary","supervisor_mobile":"9954271663","enumerator":"Rejaul hoque Chowdhury","enumerator_mobile":"6001368668","hlb":"0171","village":"Asharikandi (Kartimari) (0096)"},{"circle":"025","supervisor":"Prasanta Kumar Narzary","supervisor_mobile":"9954271663","enumerator":"Md Sapior Rahman","enumerator_mobile":"9678308384","hlb":"0172","village":"Asharikandi (Kartimari) (0096)"},{"circle":"025","supervisor":"Prasanta Kumar Narzary","supervisor_mobile":"9954271663","enumerator":"MD FULBAR ALI","enumerator_mobile":"7086186304","hlb":"0174","village":"Thakthakpara (0098)"},{"circle":"025","supervisor":"Prasanta Kumar Narzary","supervisor_mobile":"9954271663","enumerator":"Mofidul Islam","enumerator_mobile":"8752871809","hlb":"0175","village":"Bamunigaon (0099)"},{"circle":"025","supervisor":"Prasanta Kumar Narzary","supervisor_mobile":"9954271663","enumerator":"Ram prasad sharma","enumerator_mobile":"7002313673","hlb":"0176","village":"Bamunigaon (0099)"},{"circle":"025","supervisor":"Prasanta Kumar Narzary","supervisor_mobile":"9954271663","enumerator":"Rofik Ali","enumerator_mobile":"8638282852","hlb":"0177","village":"Bamunigaon (0099)"},{"circle":"025","supervisor":"Prasanta Kumar Narzary","supervisor_mobile":"9954271663","enumerator":"Md.Ismail Hussain","enumerator_mobile":"9101253239","hlb":"0178","village":"Bamunigaon (0099)"}];
+
+// OFFICIAL RESERVE LIST — DO NOT EDIT UNLESS THE OFFICIAL LIST CHANGES.
+const RESERVE_LIST = [{"sl_no":"1","name":"DHANJIT NARZARY","mobile":"8011632922"},{"sl_no":"1","name":"MD FULBAR ALI","mobile":"7086186304"},{"sl_no":"2","name":"ASHOK KUMAR CHAUHAN","mobile":"8011311886"},{"sl_no":"2","name":"JAYDEV KARMAKAR","mobile":"9678968725"},{"sl_no":"3","name":"Wilson Murmu","mobile":"8135073201"},{"sl_no":"3","name":"Shoriful Alom","mobile":"9954655752"},{"sl_no":"4","name":"Rahim Uddin","mobile":"8638268655"},{"sl_no":"4","name":"Rahim Boksho Ahmed","mobile":"9678767820"},{"sl_no":"5","name":"Emanuel Mardi","mobile":"8638716079"},{"sl_no":"5","name":"JOYNAL  ABEDIN","mobile":"9954801741"},{"sl_no":"6","name":"BIRKANG HAZOWARY","mobile":"8638740443"},{"sl_no":"7","name":"SUKUMAR ROY","mobile":"9678494430"},{"sl_no":"8","name":"SUMAN GHOSH","mobile":"9957813102"},{"sl_no":"9","name":"Bijay Kumar Roy","mobile":"9706909907"},{"sl_no":"10","name":"MP Ibrahim Ali Sheikh","mobile":"9678740271"}];
+
+export default {
+  async fetch(request, env) {
+    try {
+      const url = new URL(request.url);
+      const path = url.pathname;
+      const method = request.method.toUpperCase();
+
+      // Health endpoint: useful for checking that the Worker is alive.
+      if (path === "/api/health" && method === "GET") {
+        return json({ success: true, service: "Bhawraguri Census 2027 Portal", time: new Date().toISOString() });
+      }
+
+      // The D1 binding is required for all data operations.
+      if (!env.DB) {
+        return json({ success: false, error: "D1 binding missing. In Cloudflare add D1 binding with Variable name: DB and select bhawraguri-census-db." }, 500);
+      }
+
+      await initDB(env.DB);
+
+      // ---------------- PUBLIC PORTAL ----------------
+      if (path === "/" && method === "GET") return html(publicPage());
+
+      if (path === "/api/public/today" && method === "GET") {
+        return json(await publicToday(env.DB));
+      }
+
+      if (path === "/api/submit" && method === "POST") {
+        return submitHLB(request, env.DB);
+      }
+
+      // ---------------- ADMIN ENTRY ----------------
+      if (path === "/admin" && method === "GET") return html(adminPage());
+
+      if (path === "/api/admin/login" && method === "POST") {
+        return adminLogin(request, env);
+      }
+
+      if (path === "/api/admin/logout" && method === "POST") {
+        return adminLogout();
+      }
+
+      if (path === "/api/admin/session" && method === "GET") {
+        return json({ success: true, authenticated: await isAdmin(request, env) });
+      }
+
+      // ---------------- ADMIN ONLY ----------------
+      if (path.startsWith("/api/admin/")) {
+        if (!(await isAdmin(request, env))) return unauthorized();
+
+        if (path === "/api/admin/today") {
+          return json(await dailyReport(env.DB, currentDate()));
+        }
+
+        if (path === "/api/admin/daily") {
+          const date = clean(url.searchParams.get("date")) || currentDate();
+          if (!validDate(date)) return json({ success:false, error:"Invalid report date." }, 400);
+          return json(await dailyReport(env.DB, date));
+        }
+
+        if (path === "/api/admin/overall") {
+          return json(await overallReport(env.DB));
+        }
+
+        if (path === "/api/admin/hlb") {
+          const hlb = normalizeHLB(url.searchParams.get("hlb"));
+          if (!hlb) return json({ success:false, error:"Please enter a valid HLB number from 0001 to 0178." }, 400);
+          return json(await hlbDetails(env.DB, hlb));
+        }
+
+        if (path === "/api/admin/final-list") {
+          return json({ success:true, total:FINAL_LIST.length, rows:FINAL_LIST });
+        }
+
+        if (path === "/api/admin/reserve-list") {
+          return json({ success:true, total:RESERVE_LIST.length, rows:RESERVE_LIST });
+        }
+
+        if (path === "/api/admin/export-daily") {
+          const date = clean(url.searchParams.get("date")) || currentDate();
+          if (!validDate(date)) return json({success:false,error:"Invalid report date."},400);
+          const rows = await exportDaily(env.DB, date);
+          return csv(rows, "Census_2027_Bhawraguri_Daily_" + date + ".csv");
+        }
+
+        if (path === "/api/admin/export-final") {
+          return csv(FINAL_LIST.map(finalExportRow), "Census_2027_Bhawraguri_Final_List.csv");
+        }
+
+        if (path === "/api/admin/export-reserve") {
+          return csv(RESERVE_LIST.map(x => ({
+            "Sl No": x.sl_no,
+            "Enumerator Name": x.name,
+            "Mobile No": x.mobile
+          })), "Census_2027_Bhawraguri_Reserve_List.csv");
+        }
+      }
+
+      return text("Not Found", 404);
+    } catch (e) {
+      return json({
+        success:false,
+        error:"Server error: " + (e && e.message ? e.message : String(e))
+      }, 500);
+    }
+  }
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+function clean(v) {
+  return String(v ?? "").trim();
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, m => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[m]));
+}
+
+function num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+}
+
+function pct(a,b) {
+  return b > 0 ? Math.round((a / b) * 10000) / 100 : 0;
+}
+
+function allHLBs() {
+  return Array.from({length:TOTAL_HLB}, (_,i) => String(i+1).padStart(4,"0"));
+}
+
+function normalizeHLB(v) {
+  const s = clean(v);
+  if (!/^\d{1,4}$/.test(s)) return "";
+  const n = Number(s);
+  if (n < 1 || n > TOTAL_HLB) return "";
+  return String(n).padStart(4,"0");
+}
+
+function validDate(s) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+function currentDate() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIME_ZONE,
+    year:"numeric",
+    month:"2-digit",
+    day:"2-digit"
+  }).formatToParts(new Date());
+
+  const p = {};
+  for (const x of parts) p[x.type] = x.value;
+  return p.year + "-" + p.month + "-" + p.day;
+}
+
+function displayDate(iso) {
+  const d = new Date(iso + "T00:00:00+05:30");
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone:TIME_ZONE,
+    day:"2-digit",
+    month:"short",
+    year:"numeric"
+  }).format(d);
+}
+
+function json(data, status=200, extra={}) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers:{
+      "content-type":"application/json;charset=UTF-8",
+      "cache-control":"no-store, no-cache, must-revalidate",
+      ...extra
+    }
+  });
+}
+
+function html(body, status=200) {
+  return new Response(body, {
+    status,
+    headers:{
+      "content-type":"text/html;charset=UTF-8",
+      "cache-control":"no-store, no-cache, must-revalidate"
+    }
+  });
+}
+
+function text(body,status=200) {
+  return new Response(body, {
+    status,
+    headers:{"content-type":"text/plain;charset=UTF-8"}
+  });
+}
+
+function unauthorized() {
+  return json({success:false,error:"Admin login required."},401);
+}
+
+function csvCell(v) {
+  return '"' + String(v ?? "").replace(/"/g,'""') + '"';
+}
+
+function csv(rows, filename) {
+  const headers = rows.length ? Object.keys(rows[0]) : ["Message"];
+  const lines = [headers.map(csvCell).join(",")];
+
+  for (const row of rows) {
+    lines.push(headers.map(h => csvCell(row[h])).join(","));
+  }
+
+  return new Response("\ufeff" + lines.join("\r\n"), {
+    headers:{
+      "content-type":"text/csv;charset=UTF-8",
+      "content-disposition":'attachment; filename="' + filename + '"',
+      "cache-control":"no-store"
+    }
+  });
+}
+
+// ============================================================
+// OFFICIAL LIST HELPERS
+// ============================================================
+
+function sourceForHLB(hlb) {
+  return FINAL_LIST.find(x => x.hlb === hlb) || null;
+}
+
+function assignmentView(x) {
+  if (!x) return null;
+  return {
+    hlb:x.hlb,
+    supervisory_circle:x.circle,
+    enumerator_name:x.enumerator,
+    enumerator_mobile:x.enumerator_mobile,
+    supervisor_name:x.supervisor,
+    supervisor_mobile:x.supervisor_mobile,
+    village_name:x.village
+  };
+}
+
+function finalExportRow(x) {
+  return {
+    "Supervisory Circle No":x.circle,
+    "Supervisor Name":x.supervisor,
+    "Supervisor Mobile No":x.supervisor_mobile,
+    "Enumerator Name":x.enumerator,
+    "Enumerator Mobile No":x.enumerator_mobile,
+    "HLB No":x.hlb,
+    "Village Name":x.village
+  };
+}
+
+// ============================================================
+// D1
+// ============================================================
+
+async function initDB(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS hlb_submissions(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      report_date TEXT NOT NULL,
+      enumerator_name TEXT NOT NULL,
+      mobile TEXT NOT NULL,
+      hlb TEXT NOT NULL,
+      buildings INTEGER NOT NULL DEFAULT 0,
+      houses INTEGER NOT NULL DEFAULT 0,
+      synced INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'SUBMITTED',
+      created_at TEXT NOT NULL
+    )
+  `).run();
+
+  await db.prepare(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_hlb_report_date
+    ON hlb_submissions(report_date, hlb)
+  `).run();
+
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_hlb
+    ON hlb_submissions(hlb)
+  `).run();
+
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_report_date
+    ON hlb_submissions(report_date)
+  `).run();
+}
+
+// ============================================================
+// PUBLIC DATA
+// ============================================================
+
+async function publicToday(db) {
+  const date = currentDate();
+
+  const r = await db.prepare(`
+    SELECT hlb FROM hlb_submissions
+    WHERE report_date=?
+    ORDER BY CAST(hlb AS INTEGER)
+  `).bind(date).all();
+
+  const submitted = new Set(
+    (r.results || []).map(x => String(x.hlb).padStart(4,"0"))
+  );
+
+  return {
+    success:true,
+    report_date:date,
+    report_date_display:displayDate(date),
+    total_hlb:TOTAL_HLB,
+    submitted_hlb:submitted.size,
+    pending_hlb:TOTAL_HLB-submitted.size,
+    hlbs:allHLBs().map(h => ({
+      number:h,
+      submitted:submitted.has(h)
+    }))
+  };
+}
+
+// ============================================================
+// SUBMISSION
+// ============================================================
+
+async function submitHLB(request, db) {
+  let body;
+
+  try {
+    body = await request.json();
+  } catch {
+    return json({success:false,error:"Invalid JSON request."},400);
+  }
+
+  const hlb = normalizeHLB(body.hlb);
+  const enumeratorName = clean(body.enumerator_name);
+  const mobile = clean(body.mobile);
+  const buildings = num(body.buildings);
+  const houses = num(body.houses);
+  const synced = num(body.synced);
+
+  if (!hlb) return json({success:false,error:"Please select a valid HLB number from 0001 to 0178."},400);
+  if (!enumeratorName) return json({success:false,error:"Enumerator Name is required."},400);
+  if (!/^\d{10}$/.test(mobile)) return json({success:false,error:"Please enter a valid 10 digit mobile number."},400);
+  if (synced > houses) return json({success:false,error:"Household Synced cannot be greater than Total Census Houses."},400);
+
+  const official = sourceForHLB(hlb);
+
+  // If the HLB exists in the official Final List, require the field entry
+  // to match the official enumerator name and mobile number.
+  if (official) {
+    const sameName = clean(official.enumerator).toLowerCase() === enumeratorName.toLowerCase();
+    const sameMobile = clean(official.enumerator_mobile) === mobile;
+
+    if (!sameName || !sameMobile) {
+      return json({
+        success:false,
+        error:"Enumerator details do not match the official Final List assignment for HLB " + hlb + "."
+      },403);
+    }
+  }
+
+  const date = currentDate();
+
+  const already = await db.prepare(`
+    SELECT id FROM hlb_submissions
+    WHERE report_date=? AND hlb=?
+  `).bind(date,hlb).first();
+
+  if (already) {
+    return json({
+      success:false,
+      error:"HLB " + hlb + " has already been submitted today. A fresh submission will automatically open tomorrow."
+    },409);
+  }
+
+  const createdAt = new Date().toISOString();
+
+  try {
+    await db.prepare(`
+      INSERT INTO hlb_submissions
+      (report_date,enumerator_name,mobile,hlb,buildings,houses,synced,status,created_at)
+      VALUES(?,?,?,?,?,?,?,?,?)
+    `).bind(
+      date,
+      enumeratorName,
+      mobile,
+      hlb,
+      buildings,
+      houses,
+      synced,
+      "SUBMITTED",
+      createdAt
+    ).run();
+  } catch (e) {
+    if (String(e?.message || "").toLowerCase().includes("unique")) {
+      return json({
+        success:false,
+        error:"This HLB has already been submitted today."
+      },409);
+    }
+    throw e;
+  }
+
+  return json({
+    success:true,
+    message:"HLB " + hlb + " submitted successfully for " + displayDate(date) + ".",
+    report_date:date,
+    assignment:assignmentView(official)
+  });
+}
+
+// ============================================================
+// ADMIN REPORTS
+// ============================================================
+
+async function dailyReport(db,date) {
+  const r = await db.prepare(`
+    SELECT * FROM hlb_submissions
+    WHERE report_date=?
+    ORDER BY CAST(hlb AS INTEGER)
+  `).bind(date).all();
+
+  const rows = r.results || [];
+  const byHLB = new Map();
+
+  let buildings=0, houses=0, synced=0;
+
+  for (const x of rows) {
+    const h = normalizeHLB(x.hlb) || x.hlb;
+    const b = num(x.buildings);
+    const hs = num(x.houses);
+    const sy = num(x.synced);
+
+    buildings += b;
+    houses += hs;
+    synced += sy;
+
+    byHLB.set(h,{
+      id:x.id,
+      report_date:x.report_date,
+      hlb:h,
+      enumerator_name:x.enumerator_name,
+      mobile:x.mobile,
+      buildings:b,
+      houses:hs,
+      synced:sy,
+      percentage:pct(sy,hs),
+      status:x.status,
+      created_at:x.created_at
+    });
+  }
+
+  return {
+    success:true,
+    report_date:date,
+    report_date_display:displayDate(date),
+    total_hlb:TOTAL_HLB,
+    submitted_hlb:rows.length,
+    pending_hlb:TOTAL_HLB-rows.length,
+    buildings,
+    houses,
+    synced,
+    percentage:pct(synced,houses),
+    hlbs:allHLBs().map(h => byHLB.get(h) || {
+      id:null,
+      report_date:date,
+      hlb:h,
+      enumerator_name:"",
+      mobile:"",
+      buildings:0,
+      houses:0,
+      synced:0,
+      percentage:0,
+      status:"PENDING",
+      created_at:""
+    })
+  };
+}
+
+async function overallReport(db) {
+  // Latest submission per HLB is used for the current overall snapshot.
+  // This avoids double-counting the same HLB across different dates.
+  const r = await db.prepare(`
+    SELECT s.*
+    FROM hlb_submissions s
+    INNER JOIN (
+      SELECT hlb, MAX(id) AS max_id
+      FROM hlb_submissions
+      GROUP BY hlb
+    ) latest
+    ON s.id=latest.max_id
+    ORDER BY CAST(s.hlb AS INTEGER)
+  `).all();
+
+  const latest = r.results || [];
+
+  let buildings=0, houses=0, synced=0;
+
+  for (const x of latest) {
+    buildings += num(x.buildings);
+    houses += num(x.houses);
+    synced += num(x.synced);
+  }
+
+  const uniqueSubmitted = latest.length;
+
+  const daysResult = await db.prepare(`
+    SELECT
+      report_date,
+      COUNT(*) AS submitted_hlb,
+      SUM(buildings) AS buildings,
+      SUM(houses) AS houses,
+      SUM(synced) AS synced
+    FROM hlb_submissions
+    GROUP BY report_date
+    ORDER BY report_date DESC
+  `).all();
+
+  const days = (daysResult.results || []).map(x => ({
+    date:x.report_date,
+    submitted_hlb:num(x.submitted_hlb),
+    buildings:num(x.buildings),
+    houses:num(x.houses),
+    synced:num(x.synced),
+    percentage:pct(num(x.synced),num(x.houses))
+  }));
+
+  return {
+    success:true,
+    total_hlb:TOTAL_HLB,
+    unique_hlbs_submitted:uniqueSubmitted,
+    remaining_hlb:TOTAL_HLB-uniqueSubmitted,
+    current_buildings:buildings,
+    current_houses:houses,
+    current_synced:synced,
+    current_percentage:pct(synced,houses),
+    days,
+    last_report_date:days.length ? days[0].date : ""
+  };
+}
+
+async function hlbDetails(db,hlb) {
+  const source = sourceForHLB(hlb);
+
+  const r = await db.prepare(`
+    SELECT * FROM hlb_submissions
+    WHERE hlb=?
+    ORDER BY report_date DESC, id DESC
+  `).bind(hlb).all();
+
+  const history = (r.results || []).map(x => ({
+    report_date:x.report_date,
+    buildings:num(x.buildings),
+    houses:num(x.houses),
+    synced:num(x.synced),
+    percentage:pct(num(x.synced),num(x.houses)),
+    status:x.status,
+    created_at:x.created_at
+  }));
+
+  return {
+    success:true,
+    assignment:assignmentView(source),
+    history
+  };
+}
+
+async function exportDaily(db,date) {
+  const r = await db.prepare(`
+    SELECT * FROM hlb_submissions
+    WHERE report_date=?
+    ORDER BY CAST(hlb AS INTEGER)
+  `).bind(date).all();
+
+  return (r.results || []).map(x => {
+    const a = assignmentView(sourceForHLB(normalizeHLB(x.hlb)));
+
+    return {
+      "Report Date":x.report_date,
+      "HLB No":normalizeHLB(x.hlb) || x.hlb,
+      "Supervisory Circle No":a?.supervisory_circle || "",
+      "Enumerator Name":a?.enumerator_name || x.enumerator_name,
+      "Enumerator Mobile No":a?.enumerator_mobile || x.mobile,
+      "Supervisor Name":a?.supervisor_name || "",
+      "Supervisor Mobile No":a?.supervisor_mobile || "",
+      "Village Name":a?.village_name || "",
+      "Total Buildings":num(x.buildings),
+      "Total Census Houses":num(x.houses),
+      "Household Synced":num(x.synced),
+      "Progress %":pct(num(x.synced),num(x.houses)) + "%",
+      "Status":x.status,
+      "Submitted At":x.created_at
+    };
+  });
+}
+
+// ============================================================
+// ADMIN AUTH
+// ============================================================
+
+const encoder = new TextEncoder();
+
+function b64url(bytes) {
+  let s="";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+
+function fromB64url(s) {
+  s=s.replace(/-/g,"+").replace(/_/g,"/");
+  while (s.length % 4) s += "=";
+  const bin=atob(s);
+  const out=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
+  return out;
+}
+
+async function signature(secret,data) {
+  const key=await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    {name:"HMAC",hash:"SHA-256"},
+    false,
+    ["sign","verify"]
+  );
+  const sig=await crypto.subtle.sign("HMAC",key,encoder.encode(data));
+  return b64url(new Uint8Array(sig));
+}
+
+async function verifySignature(secret,data,sig) {
+  const key=await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    {name:"HMAC",hash:"SHA-256"},
+    false,
+    ["sign","verify"]
+  );
+
+  try {
+    return await crypto.subtle.verify(
+      "HMAC",
+      key,
+      fromB64url(sig),
+      encoder.encode(data)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function getCookie(request,name) {
+  const cookie=request.headers.get("Cookie") || "";
+  const parts=cookie.split(";");
+
+  for(const p of parts) {
+    const i=p.indexOf("=");
+    if(i<0) continue;
+    const k=p.slice(0,i).trim();
+    if(k===name) return decodeURIComponent(p.slice(i+1));
+  }
+
+  return "";
+}
+
+async function makeSession(secret) {
+  const payload={
+    iat:Date.now(),
+    exp:Date.now()+8*60*60*1000
+  };
+
+  const data=b64url(encoder.encode(JSON.stringify(payload)));
+  return data + "." + await signature(secret,data);
+}
+
+async function isAdmin(request,env) {
+  const secret=clean(env.ADMIN_SESSION_SECRET);
+  if(!secret) return false;
+
+  const token=getCookie(request,"admin_session");
+  if(!token || !token.includes(".")) return false;
+
+  const i=token.lastIndexOf(".");
+  const data=token.slice(0,i);
+  const sig=token.slice(i+1);
+
+  if(!(await verifySignature(secret,data,sig))) return false;
+
+  try {
+    const payload=JSON.parse(new TextDecoder().decode(fromB64url(data)));
+    return Number(payload.exp) > Date.now();
+  } catch {
+    return false;
+  }
+}
+
+async function adminLogin(request,env) {
+  const username=clean(env.ADMIN_USERNAME || env.ADMIN_USER);
+  const password=clean(env.ADMIN_PASSWORD);
+  const secret=clean(env.ADMIN_SESSION_SECRET);
+
+  if(!username || !password || !secret) {
+    return json({
+      success:false,
+      error:"Admin authentication is not configured. Add ADMIN_USERNAME, ADMIN_PASSWORD and ADMIN_SESSION_SECRET in Cloudflare Worker Secrets."
+    },500);
+  }
+
+  let body;
+  try {
+    body=await request.json();
+  } catch {
+    return json({success:false,error:"Invalid login request."},400);
+  }
+
+  if(
+    clean(body.username)!==username ||
+    String(body.password ?? "")!==password
+  ) {
+    return json({success:false,error:"Invalid username or password."},401);
+  }
+
+  const token=await makeSession(secret);
+
+  return json(
+    {success:true,message:"Admin login successful."},
+    200,
+    {
+      "set-cookie":
+        "admin_session=" +
+        encodeURIComponent(token) +
+        "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=28800"
+    }
+  );
+}
+
+function adminLogout() {
+  return json(
+    {success:true,message:"Logged out."},
+    200,
+    {
+      "set-cookie":
+        "admin_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0"
+    }
+  );
+}
+
+// ============================================================
+// PUBLIC PAGE
+// ============================================================
+
+function publicPage() {
+return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Census 2027 - Bhawraguri Charge</title>
+<style>
+:root{
+ --navy:#071d49;--blue:#0b63df;--cyan:#0ba5bc;--ink:#102b55;
+ --muted:#64748b;--bg:#eef4fb;--card:#fff;--green:#087f6d;--red:#c62828;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:linear-gradient(180deg,#eaf2fb,#f8fafc);color:var(--ink)}
+.hero{background:linear-gradient(125deg,#061a42,#075dca 55%,#08a3ba);color:#fff;padding:34px 18px 40px}
+.wrap{max-width:1100px;margin:auto}
+.brand{display:flex;align-items:center;gap:18px}
+.logo{width:78px;height:78px;border-radius:25px;background:#fff;color:#174780;display:grid;place-items:center;font-weight:1000;font-size:25px;box-shadow:0 15px 35px #00183c44}
+.hero h1{font-size:36px;margin:0 0 7px}
+.hero p{margin:0;font-weight:700;opacity:.92}
+.date{display:inline-flex;margin-top:25px;padding:12px 17px;border:1px solid #ffffff33;background:#ffffff18;border-radius:14px;font-weight:900}
+.main{padding:24px 16px 55px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}
+.stat{background:#fff;border:1px solid #dbe7f4;border-radius:20px;padding:20px;box-shadow:0 12px 35px #17395b12}
+.stat span{display:block;color:var(--muted);font-size:11px;font-weight:1000;letter-spacing:1px;margin-bottom:8px}
+.stat b{font-size:30px;color:var(--blue)}
+.card{background:#fff;border:1px solid #dbe7f4;border-radius:25px;padding:24px;margin-top:18px;box-shadow:0 15px 45px #17395b12}
+h2{margin:0 0 6px}.sub{color:var(--muted);font-size:14px;margin-bottom:18px}
+.note{background:#eef6ff;border:1px solid #d6e6fb;border-radius:15px;padding:14px;font-size:13px;font-weight:800;color:#28527e}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+.field label{display:block;font-size:11px;font-weight:1000;color:#52657e;margin-bottom:7px}
+.field input,.field select{width:100%;padding:14px;border:1px solid #cbd8e7;border-radius:13px;font-size:16px;background:#fff}
+.full{grid-column:1/-1}
+.btn{border:0;border-radius:14px;padding:15px 18px;font-size:15px;font-weight:1000;cursor:pointer}
+.primary{background:linear-gradient(90deg,#0863dc,#1688ee);color:#fff;width:100%}
+.admin{display:block;text-decoration:none;text-align:center;color:#244b79;font-weight:900;padding:15px}
+.progress{height:11px;background:#e6edf6;border-radius:999px;overflow:hidden;margin-top:8px}
+.bar{height:100%;background:linear-gradient(90deg,#0864df,#0ba4b9);width:0}
+.msg{display:none;margin-top:15px;padding:14px;border-radius:13px;font-weight:800}
+.ok{display:block;background:#e8f8f2;color:#08715e}.err{display:block;background:#fff0f0;color:#a32020}
+footer{text-align:center;color:#718096;padding:22px;font-size:13px}
+@media(max-width:800px){.grid{grid-template-columns:1fr 1fr}.form{grid-template-columns:1fr}.hero h1{font-size:29px}}
+@media(max-width:500px){.grid{grid-template-columns:1fr}.logo{width:65px;height:65px}.hero h1{font-size:25px}}
+</style>
+</head>
+<body>
+<header class="hero">
+ <div class="wrap">
+  <div class="brand">
+   <div class="logo">C27</div>
+   <div>
+    <h1>Census 2027 - Bhawraguri Charge</h1>
+    <p>Official HLB Progress Monitoring System</p>
+   </div>
+  </div>
+  <div class="date">🇮🇳 Report Date: <span id="date">Loading...</span></div>
+ </div>
+</header>
+
+<main class="wrap main">
+ <div class="grid">
+  <div class="stat"><span>TOTAL HLB</span><b id="total">178</b></div>
+  <div class="stat"><span>SUBMITTED TODAY</span><b id="submitted">0</b></div>
+  <div class="stat"><span>PENDING TODAY</span><b id="pending">178</b></div>
+  <div class="stat"><span>TODAY SYNCED</span><b id="synced">0</b></div>
+ </div>
+
+ <section class="card">
+  <h2>📋 HLB Daily Progress Entry</h2>
+  <div class="sub">One HLB can be submitted once per day. The next day automatically opens a fresh daily cycle.</div>
+  <div class="note">🔒 Admin-only assignment information is protected. Public users cannot view the Final List, Reserve List or Supervisor details.</div>
+
+  <form class="form" id="form">
+   <div class="field">
+    <label>ENUMERATOR NAME</label>
+    <input id="name" required placeholder="Enter official Enumerator Name">
+   </div>
+
+   <div class="field">
+    <label>MOBILE NUMBER</label>
+    <input id="mobile" required maxlength="10" inputmode="numeric" placeholder="10 digit mobile number">
+   </div>
+
+   <div class="field">
+    <label>HLB NUMBER</label>
+    <select id="hlb" required>
+     <option value="">-- Select HLB Number --</option>
+    </select>
+   </div>
+
+   <div class="field">
+    <label>TOTAL BUILDINGS</label>
+    <input id="buildings" type="number" min="0" value="0">
+   </div>
+
+   <div class="field">
+    <label>TOTAL CENSUS HOUSES</label>
+    <input id="houses" type="number" min="0" value="0">
+   </div>
+
+   <div class="field">
+    <label>HOUSEHOLD SYNCED</label>
+    <input id="syncedInput" type="number" min="0" value="0">
+   </div>
+
+   <div class="full">
+    <div class="progress"><div id="bar" class="bar"></div></div>
+    <div id="percent" style="text-align:right;font-weight:1000;margin-top:6px">0%</div>
+   </div>
+
+   <div class="full">
+    <button id="submit" class="btn primary" type="submit">FINAL SUBMIT — ONCE TODAY</button>
+   </div>
+  </form>
+
+  <div id="msg" class="msg"></div>
+ </section>
+
+ <a class="admin" href="/admin">🔐 Restricted Admin Login</a>
+</main>
+
+<footer>Census 2027 • Bhawraguri Charge • Official Monitoring Portal</footer>
+
+<script>
+const $=id=>document.getElementById(id);
+
+function show(message,kind){
+ const m=$("msg");
+ m.textContent=message;
+ m.className="msg "+kind;
+}
+
+async function load(){
+ try{
+  const r=await fetch("/api/public/today",{cache:"no-store"});
+  const d=await r.json();
+  if(!r.ok||!d.success) throw new Error(d.error||"Data loading failed");
+
+  $("date").textContent=d.report_date_display;
+  $("total").textContent=d.total_hlb;
+  $("submitted").textContent=d.submitted_hlb;
+  $("pending").textContent=d.pending_hlb;
+
+  $("hlb").innerHTML='<option value="">-- Select HLB Number --</option>'+
+    d.hlbs.map(x=>'<option value="'+x.number+'" '+(x.submitted?"disabled":"")+'>'+
+    x.number+(x.submitted?" — SUBMITTED TODAY":"")+'</option>').join("");
+ }catch(e){show(e.message,"err")}
+}
+
+function calc(){
+ const h=Number($("houses").value||0);
+ const s=Number($("syncedInput").value||0);
+ const p=h>0?Math.min(100,(s/h)*100):0;
+ $("synced").textContent=s;
+ $("bar").style.width=p+"%";
+ $("percent").textContent=p.toFixed(2)+"%";
+}
+
+$("mobile").addEventListener("input",()=>{
+ $("mobile").value=$("mobile").value.replace(/\\D/g,"").slice(0,10);
+});
+$("houses").addEventListener("input",calc);
+$("syncedInput").addEventListener("input",calc);
+
+$("form").addEventListener("submit",async e=>{
+ e.preventDefault();
+
+ const data={
+  enumerator_name:$("name").value.trim(),
+  mobile:$("mobile").value.trim(),
+  hlb:$("hlb").value,
+  buildings:Number($("buildings").value||0),
+  houses:Number($("houses").value||0),
+  synced:Number($("syncedInput").value||0)
+ };
+
+ if(!/^\\d{10}$/.test(data.mobile)){
+  show("Please enter a valid 10 digit mobile number.","err");return;
+ }
+
+ if(data.synced>data.houses){
+  show("Household Synced cannot be greater than Total Census Houses.","err");return;
+ }
+
+ if(!data.hlb){
+  show("Please select an HLB number.","err");return;
+ }
+
+ if(!confirm(
+  "Confirm FINAL SUBMIT?\\n\\nHLB: "+data.hlb+
+  "\\nBuildings: "+data.buildings+
+  "\\nCensus Houses: "+data.houses+
+  "\\nHousehold Synced: "+data.synced+
+  "\\n\\nThis HLB can be submitted only once today."
+ )) return;
+
+ const b=$("submit");
+ b.disabled=true;
+ b.textContent="SUBMITTING...";
+
+ try{
+  const r=await fetch("/api/submit",{
+   method:"POST",
+   headers:{"content-type":"application/json"},
+   body:JSON.stringify(data)
+  });
+
+  const d=await r.json();
+
+  if(!r.ok||!d.success) throw new Error(d.error||"Submission failed");
+
+  show(d.message,"ok");
+
+  $("form").reset();
+  $("buildings").value=0;
+  $("houses").value=0;
+  $("syncedInput").value=0;
+  calc();
+  await load();
+ }catch(e){
+  show(e.message,"err");
+ }finally{
+  b.disabled=false;
+  b.textContent="FINAL SUBMIT — ONCE TODAY";
+ }
+});
+
+load();
+calc();
+</script>
+</body>
+</html>`;
+}
+
+// ============================================================
+// ADMIN PAGE
+// ============================================================
+
+function adminPage() {
+return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Census 2027 - Bhawraguri Admin</title>
+<style>
+:root{
+ --navy:#061a42;--navy2:#0b2d69;--blue:#0968e4;--cyan:#0ba5bb;
+ --bg:#edf4fb;--ink:#102b55;--muted:#687b92;--card:#fff;
+ --line:#d9e5f2;--green:#07806d;--red:#c52828;--gold:#bd8200;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:linear-gradient(180deg,#eaf2fb,#f7fafc);color:var(--ink)}
+button,input{font:inherit}
+.hero{background:linear-gradient(125deg,#05173a,#075fca 58%,#0aa4bb);color:#fff;padding:30px 18px 32px;box-shadow:0 12px 35px #001d4c30}
+.wrap{max-width:1320px;margin:auto}
+.brand{display:flex;gap:18px;align-items:center}
+.logo{width:76px;height:76px;border-radius:24px;background:#fff;color:#174781;display:grid;place-items:center;font-size:25px;font-weight:1000;box-shadow:0 15px 35px #00183c55}
+.hero h1{font-size:34px;margin:0 0 6px}.hero p{margin:0;font-weight:700;opacity:.92}
+.main{padding:22px 15px 55px}
+.security{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:16px}
+.badge{display:inline-flex;padding:9px 13px;border-radius:999px;background:#e8f2ff;color:#1657a7;font-weight:1000;font-size:11px}
+.btn{border:0;border-radius:13px;padding:12px 16px;font-weight:1000;cursor:pointer}
+.logout{background:#c62b2b;color:#fff}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:20px;padding:19px;box-shadow:0 12px 32px #17395b12}
+.stat span{display:block;color:var(--muted);font-size:11px;font-weight:1000;letter-spacing:1px;margin-bottom:8px}
+.stat b{font-size:31px;color:var(--blue)}
+.nav{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:17px 0}
+.nav button{background:#fff;border:1px solid var(--line);color:#244978;border-radius:15px;padding:15px 9px;font-weight:1000;cursor:pointer;min-height:72px}
+.nav button.active{background:linear-gradient(135deg,#123d7b,#075fd0);color:#fff;border-color:#123d7b;box-shadow:0 9px 22px #12407b25}
+.nav button.disabled{opacity:.55;cursor:not-allowed;background:#f0f3f7}
+.panel{background:#fff;border:1px solid var(--line);border-radius:24px;padding:21px;box-shadow:0 13px 38px #17395b12}
+.hidden{display:none}
+.title{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}
+h2{margin:0 0 5px}.sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:15px}
+.mini{background:#f7faff;border:1px solid #dce7f3;border-radius:16px;padding:15px}
+.mini span{display:block;color:#718198;font-size:10px;font-weight:1000;letter-spacing:.7px;margin-bottom:7px}
+.mini b{font-size:24px}.mini small{display:block;color:#60738a;margin-top:5px;font-weight:800}
+.toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.toolbar input{padding:12px;border:1px solid #cbd9e8;border-radius:12px}
+.searchbox{display:flex;gap:10px;margin-top:12px}.searchbox input{flex:1;padding:14px;border:1px solid #cbd9e8;border-radius:13px}
+.primary{background:linear-gradient(90deg,#0864df,#1588ee);color:#fff}
+.green{background:#087f6d;color:#fff}.dark{background:#173f79;color:#fff}
+.gold{background:#b98508;color:#fff}
+.notice{padding:15px;border-radius:14px;background:#fff7e7;border:1px solid #efdcae;color:#775a09;font-weight:900}
+.lock{padding:18px;border-radius:17px;background:#f1f4f8;border:1px dashed #c8d3df;color:#60738b;text-align:center;font-weight:1000}
+.tablewrap{overflow:auto;border:1px solid #dce6f0;border-radius:16px;margin-top:15px;max-height:590px}
+.table{border-collapse:collapse;width:100%;min-width:1000px;background:#fff}
+.table th{position:sticky;top:0;background:#102f62;color:#fff;padding:12px;text-align:left;font-size:11px;z-index:2}
+.table td{padding:10px;border-bottom:1px solid #e7edf4;font-size:13px;vertical-align:top}
+.table tr:hover td{background:#f7fbff}
+.pill{display:inline-block;padding:5px 9px;border-radius:999px;background:#e6f7f1;color:#08705f;font-size:10px;font-weight:1000}
+.pill.pending{background:#fff3da;color:#946300}
+.result{margin-top:15px}
+.detailgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.detail{background:#f8fbff;border:1px solid #dce8f4;border-radius:17px;padding:15px}
+.detail span{display:block;color:#72839a;font-size:10px;font-weight:1000;letter-spacing:.7px;margin-bottom:6px}
+.detail b{font-size:18px}
+.error{padding:14px;border-radius:13px;background:#fff0f0;color:#a21f1f;font-weight:900}
+.success{padding:14px;border-radius:13px;background:#e9f8f2;color:#08725f;font-weight:900}
+.login{min-height:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at 20% 10%,#126ad0 0,#071c49 45%,#03112d 100%)}
+.loginbox{width:min(470px,100%);background:#fff;border-radius:28px;padding:32px;box-shadow:0 30px 90px #00000055}
+.loginbox .logo{margin:0 auto 14px}
+.loginbox h1{text-align:center;margin:0 0 5px;font-size:28px}.loginbox p{text-align:center;color:#6c7d92;margin:0 0 20px;font-weight:700}
+.field{margin:13px 0}.field label{display:block;font-size:11px;font-weight:1000;color:#53677f;margin-bottom:7px}
+.field input{width:100%;padding:14px;border:1px solid #cbd8e7;border-radius:13px}
+.full{width:100%}
+.footer{text-align:center;color:#718096;padding:22px;font-size:13px}
+@media(max-width:1000px){.grid4,.cards{grid-template-columns:repeat(2,1fr)}.nav{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:650px){.grid4,.cards,.detailgrid{grid-template-columns:1fr 1fr}.nav{grid-template-columns:repeat(2,1fr)}.security{align-items:flex-start;flex-direction:column}.hero h1{font-size:27px}}
+@media(max-width:480px){.grid4,.cards,.detailgrid{grid-template-columns:1fr}.hero h1{font-size:23px}.logo{width:65px;height:65px}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+let logged=false;
+
+function esc(s){
+ return String(s??"").replace(/[&<>"']/g,m=>({
+  "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+ }[m]));
+}
+
+function loginPage(){
+ $("app").innerHTML=\`
+ <div class="login">
+  <div class="loginbox">
+   <div class="logo">C27</div>
+   <h1>Census 2027 - Admin</h1>
+   <p>Bhawraguri Charge • Restricted Administration Portal</p>
+
+   <div class="field">
+    <label>ADMIN USERNAME</label>
+    <input id="u" autocomplete="username" placeholder="Enter admin username">
+   </div>
+
+   <div class="field">
+    <label>ADMIN PASSWORD</label>
+    <input id="p" type="password" autocomplete="current-password" placeholder="Enter admin password">
+   </div>
+
+   <button id="loginBtn" class="btn primary full">🔐 LOGIN TO ADMIN DASHBOARD</button>
+   <div id="loginMsg"></div>
+
+   <div class="notice" style="margin-top:16px">
+    🔒 Admin-only access. Phase-I assignment details, Final List, Reserve List and reports are restricted.
+   </div>
+  </div>
+ </div>\`;
+
+ $("loginBtn").onclick=doLogin;
+ $("p").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin()});
+ $("u").addEventListener("keydown",e=>{if(e.key==="Enter")$("p").focus()});
+}
+
+async function doLogin(){
+ const b=$("loginBtn");
+ b.disabled=true;
+ b.textContent="AUTHENTICATING...";
+
+ try{
+  const r=await fetch("/api/admin/login",{
+   method:"POST",
+   headers:{"content-type":"application/json"},
+   credentials:"same-origin",
+   body:JSON.stringify({
+    username:$("u").value.trim(),
+    password:$("p").value
+   })
+  });
+
+  const d=await r.json();
+
+  if(!r.ok||!d.success) throw new Error(d.error||"Login failed");
+
+  await dashboard();
+ }catch(e){
+  $("loginMsg").innerHTML='<div class="error" style="margin-top:13px">'+esc(e.message)+'</div>';
+ }finally{
+  if($("loginBtn")){
+   b.disabled=false;
+   b.textContent="🔐 LOGIN TO ADMIN DASHBOARD";
+  }
+ }
+}
+
+async function api(path){
+ const r=await fetch(path,{
+  cache:"no-store",
+  credentials:"same-origin"
+ });
+
+ let d={};
+ try{d=await r.json()}catch{}
+
+ if(r.status===401){
+  logged=false;
+  loginPage();
+  throw new Error("Admin session expired. Please login again.");
+ }
+
+ if(!r.ok||!d.success) throw new Error(d.error||"Request failed");
+ return d;
+}
+
+async function logout(){
+ await fetch("/api/admin/logout",{
+  method:"POST",
+  credentials:"same-origin"
+ });
+ logged=false;
+ loginPage();
+}
+
+async function dashboard(){
+ logged=true;
+
+ $("app").innerHTML=\`
+ <header class="hero">
+  <div class="wrap">
+   <div class="brand">
+    <div class="logo">C27</div>
+    <div>
+     <h1>Census 2027 - Admin Dashboard</h1>
+     <p>Bhawraguri Charge • Official Administration Control Panel</p>
+    </div>
+   </div>
+  </div>
+ </header>
+
+ <main class="wrap main">
+  <div class="security">
+   <div>
+    <span class="badge">🔐 ADMIN ONLY • PHASE-I CONTROL PANEL</span>
+    <div class="sub" style="margin:7px 0 0">Enumerator users cannot access these administrative modules.</div>
+   </div>
+   <button id="logout" class="btn logout">🔒 LOGOUT</button>
+  </div>
+
+  <div id="stats" class="grid4"></div>
+
+  <nav class="nav">
+   <button class="active" data-tab="daily">📅<br>DAILY REPORT</button>
+   <button data-tab="overall">📊<br>OVERALL PROGRESS</button>
+   <button data-tab="search">🔎<br>SEARCH HLB DETAILS</button>
+   <button data-tab="report">📋<br>REPORT</button>
+   <button data-tab="reserve">🛡️<br>RESERVE LIST</button>
+   <button data-tab="final">🏆<br>FINAL LIST</button>
+   <button class="disabled" data-tab="phase2">🚧<br>PHASE II<br>COMING SOON</button>
+  </nav>
+
+  <section id="daily" class="panel"></section>
+  <section id="overall" class="panel hidden"></section>
+  <section id="search" class="panel hidden"></section>
+  <section id="report" class="panel hidden"></section>
+  <section id="reserve" class="panel hidden"></section>
+  <section id="final" class="panel hidden"></section>
+  <section id="phase2" class="panel hidden"></section>
+
+  <div class="footer">Census 2027 • Bhawraguri Charge • Restricted Admin Portal</div>
+ </main>\`;
+
+ $("logout").onclick=logout;
+
+ document.querySelectorAll(".nav button").forEach(btn=>{
+  btn.onclick=()=>{
+   if(btn.dataset.tab==="phase2") return;
+   showTab(btn.dataset.tab);
+  };
+ });
+
+ await loadDaily();
+}
+
+function showTab(tab){
+ document.querySelectorAll(".nav button").forEach(b=>{
+  b.classList.toggle("active",b.dataset.tab===tab);
+ });
+
+ ["daily","overall","search","report","reserve","final","phase2"].forEach(id=>{
+  $(id).classList.toggle("hidden",id!==tab);
+ });
+
+ if(tab==="overall") loadOverall();
+ if(tab==="search") renderSearch();
+ if(tab==="report") loadReport();
+ if(tab==="reserve") loadReserve();
+ if(tab==="final") loadFinal();
+}
+
+function statsHTML(d){
+ return \`
+ <div class="stat"><span>TOTAL HLB</span><b>\${d.total_hlb}</b></div>
+ <div class="stat"><span>SUBMITTED TODAY</span><b>\${d.submitted_hlb}</b></div>
+ <div class="stat"><span>PENDING TODAY</span><b>\${d.pending_hlb}</b></div>
+ <div class="stat"><span>HOUSEHOLD SYNCED</span><b>\${d.synced}</b></div>\`;
+}
+
+async function loadDaily(){
+ try{
+  const d=await api("/api/admin/today");
+  $("stats").innerHTML=statsHTML(d);
+
+  $("daily").innerHTML=\`
+   <div class="title">
+    <div>
+     <h2>📅 Daily HLB Report</h2>
+     <div class="sub">\${esc(d.report_date_display)} • India time (Asia/Kolkata) • New daily cycle automatically starts on the next date.</div>
+    </div>
+
+    <div class="toolbar">
+     <input id="dailyDate" type="date" value="\${d.report_date}">
+     <button id="loadDate" class="btn primary">LOAD DATE</button>
+     <button id="downloadDaily" class="btn green">📥 EXCEL/CSV</button>
+    </div>
+   </div>
+
+   <div class="cards">
+    <div class="mini"><span>BUILDINGS</span><b>\${d.buildings}</b></div>
+    <div class="mini"><span>CENSUS HOUSES</span><b>\${d.houses}</b></div>
+    <div class="mini"><span>HOUSEHOLD SYNCED</span><b>\${d.synced}</b></div>
+    <div class="mini"><span>SYNC %</span><b>\${Number(d.percentage).toFixed(2)}%</b></div>
+   </div>
+
+   <div class="tablewrap">
+    <table class="table">
+     <thead>
+      <tr>
+       <th>HLB NO</th><th>ENUMERATOR</th><th>MOBILE</th>
+       <th>BUILDINGS</th><th>HOUSES</th><th>SYNCED</th>
+       <th>PROGRESS</th><th>STATUS</th>
+      </tr>
+     </thead>
+     <tbody id="dailyBody"></tbody>
+    </table>
+   </div>\`;
+
+  renderDailyRows(d.hlbs);
+
+  $("loadDate").onclick=()=>loadDate($("dailyDate").value);
+  $("downloadDaily").onclick=()=>{
+   window.location="/api/admin/export-daily?date="+encodeURIComponent($("dailyDate").value);
+  };
+ }catch(e){
+  if(logged) $("daily").innerHTML='<div class="error">'+esc(e.message)+'</div>';
+ }
+}
+
+function renderDailyRows(rows){
+ $("dailyBody").innerHTML=rows.map(x=>\`
+  <tr>
+   <td><b>\${esc(x.hlb)}</b></td>
+   <td>\${esc(x.enumerator_name||"—")}</td>
+   <td>\${esc(x.mobile||"—")}</td>
+   <td>\${x.buildings}</td>
+   <td>\${x.houses}</td>
+   <td>\${x.synced}</td>
+   <td>\${Number(x.percentage).toFixed(2)}%</td>
+   <td><span class="pill \${x.status==="PENDING"?"pending":""}">\${esc(x.status)}</span></td>
+  </tr>\`).join("");
+}
+
+async function loadDate(date){
+ try{
+  const d=await api("/api/admin/daily?date="+encodeURIComponent(date));
+  $("stats").innerHTML=statsHTML(d);
+  renderDailyRows(d.hlbs);
+
+  const sub=$("daily").querySelector(".sub");
+  if(sub) sub.textContent=d.report_date_display+" • Selected daily report";
+ }catch(e){
+  alert(e.message);
+ }
+}
+
+async function loadOverall(){
+ try{
+  const d=await api("/api/admin/overall");
+
+  $("overall").innerHTML=\`
+   <div class="title">
+    <div>
+     <h2>📊 Overall Progress</h2>
+     <div class="sub">Current snapshot uses the latest submitted record for each HLB, so the same HLB is not double-counted across days.</div>
+    </div>
+   </div>
+
+   <div class="cards">
+    <div class="mini"><span>HLB WITH DATA</span><b>\${d.unique_hlbs_submitted}/\${d.total_hlb}</b></div>
+    <div class="mini"><span>REMAINING HLB</span><b>\${d.remaining_hlb}</b></div>
+    <div class="mini"><span>CURRENT HOUSES</span><b>\${d.current_houses}</b></div>
+    <div class="mini"><span>CURRENT SYNCED</span><b>\${d.current_synced}</b></div>
+   </div>
+
+   <div class="cards">
+    <div class="mini"><span>BUILDINGS</span><b>\${d.current_buildings}</b></div>
+    <div class="mini"><span>SYNC PROGRESS</span><b>\${Number(d.current_percentage).toFixed(2)}%</b></div>
+    <div class="mini"><span>LAST REPORT DATE</span><b style="font-size:18px">\${esc(d.last_report_date||"—")}</b></div>
+    <div class="mini"><span>TOTAL HLB</span><b>\${d.total_hlb}</b></div>
+   </div>
+
+   <div class="tablewrap">
+    <table class="table">
+     <thead><tr><th>DATE</th><th>HLB SUBMITTED</th><th>BUILDINGS</th><th>HOUSES</th><th>SYNCED</th><th>SYNC %</th></tr></thead>
+     <tbody>
+      \${d.days.map(x=>\`
+       <tr>
+        <td>\${esc(x.date)}</td>
+        <td>\${x.submitted_hlb}</td>
+        <td>\${x.buildings}</td>
+        <td>\${x.houses}</td>
+        <td>\${x.synced}</td>
+        <td>\${Number(x.percentage).toFixed(2)}%</td>
+       </tr>\`).join("")}
+     </tbody>
+    </table>
+   </div>\`;
+ }catch(e){
+  $("overall").innerHTML='<div class="error">'+esc(e.message)+'</div>';
+ }
+}
+
+function renderSearch(){
+ $("search").innerHTML=\`
+  <h2>🔎 Search HLB Details</h2>
+  <div class="sub">Admin-only. Enter HLB number 0001 to 0178. Press Enter or click Search.</div>
+
+  <div class="searchbox">
+   <input id="hlbSearch" inputmode="numeric" maxlength="4" placeholder="Enter HLB No. e.g. 0002">
+   <button id="searchButton" class="btn primary">🔎 SEARCH HLB</button>
+  </div>
+
+  <div id="searchResult" class="result"></div>\`;
+
+ $("hlbSearch").addEventListener("input",()=>{
+  $("hlbSearch").value=$("hlbSearch").value.replace(/\\D/g,"").slice(0,4);
+ });
+
+ $("searchButton").onclick=doSearch;
+ $("hlbSearch").addEventListener("keydown",e=>{
+  if(e.key==="Enter") doSearch();
+ });
+}
+
+async function doSearch(){
+ try{
+  const value=$("hlbSearch").value.trim();
+  const d=await api("/api/admin/hlb?hlb="+encodeURIComponent(value));
+
+  if(!d.assignment){
+   $("searchResult").innerHTML='<div class="error">HLB '+esc(value)+' was not found in the official Final List.</div>';
+   return;
+  }
+
+  const a=d.assignment;
+
+  $("searchResult").innerHTML=\`
+   <div class="detailgrid">
+    <div class="detail"><span>HLB NUMBER</span><b>\${esc(a.hlb)}</b></div>
+    <div class="detail"><span>SUPERVISORY CIRCLE NO</span><b>\${esc(a.supervisory_circle)}</b></div>
+    <div class="detail"><span>ENUMERATOR NAME</span><b>\${esc(a.enumerator_name)}</b><small>\${esc(a.enumerator_mobile)}</small></div>
+    <div class="detail"><span>SUPERVISOR NAME</span><b>\${esc(a.supervisor_name)}</b><small>\${esc(a.supervisor_mobile)}</small></div>
+    <div class="detail" style="grid-column:1/-1"><span>VILLAGE NAME — OFFICIAL ALLOTMENT</span><b>\${esc(a.village_name||"")}</b></div>
+   </div>
+
+   <div style="margin-top:18px;font-weight:1000">📅 Submission History</div>
+
+   <div class="tablewrap">
+    <table class="table">
+     <thead><tr><th>DATE</th><th>BUILDINGS</th><th>HOUSES</th><th>SYNCED</th><th>PROGRESS</th><th>STATUS</th></tr></thead>
+     <tbody>
+      \${d.history.length?d.history.map(x=>\`
+       <tr>
+        <td>\${esc(x.report_date)}</td>
+        <td>\${x.buildings}</td>
+        <td>\${x.houses}</td>
+        <td>\${x.synced}</td>
+        <td>\${Number(x.percentage).toFixed(2)}%</td>
+        <td><span class="pill">\${esc(x.status)}</span></td>
+       </tr>\`).join(""):'<tr><td colspan="6" style="text-align:center;padding:30px">No daily submission found for this HLB.</td></tr>'}
+     </tbody>
+    </table>
+   </div>\`;
+ }catch(e){
+  $("searchResult").innerHTML='<div class="error">'+esc(e.message)+'</div>';
+ }
+}
+
+async function loadReport(){
+ try{
+  const d=await api("/api/admin/overall");
+
+  $("report").innerHTML=\`
+   <div class="title">
+    <div>
+     <h2>📋 Administrative Report Centre</h2>
+     <div class="sub">Select any date from Daily Report to review that day's complete HLB status and export it.</div>
+    </div>
+    <button class="btn green" id="reportToday">📥 TODAY'S REPORT</button>
+   </div>
+
+   <div class="cards">
+    <div class="mini"><span>TOTAL HLB</span><b>\${d.total_hlb}</b></div>
+    <div class="mini"><span>HLB WITH DATA</span><b>\${d.unique_hlbs_submitted}</b></div>
+    <div class="mini"><span>REMAINING HLB</span><b>\${d.remaining_hlb}</b></div>
+    <div class="mini"><span>LAST REPORT</span><b style="font-size:18px">\${esc(d.last_report_date||"—")}</b></div>
+   </div>
+
+   <div class="lock" style="margin-top:15px">
+    🔐 Reports are available only after successful Admin authentication.
+    Use DAILY REPORT to select a specific date and download the report.
+   </div>\`;
+
+  $("reportToday").onclick=()=>window.location="/api/admin/export-daily?date="+encodeURIComponent(
+    new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Kolkata"})
+  );
+ }catch(e){
+  $("report").innerHTML='<div class="error">'+esc(e.message)+'</div>';
+ }
+}
+
+async function loadReserve(){
+ try{
+  const d=await api("/api/admin/reserve-list");
+
+  $("reserve").innerHTML=\`
+   <div class="title">
+    <div>
+     <h2>🛡️ Reserve List</h2>
+     <div class="sub">Official Reserve List • Admin-only • \${d.total} records</div>
+    </div>
+    <button id="reserveDownload" class="btn green">📥 DOWNLOAD LIST</button>
+   </div>
+
+   <div class="tablewrap">
+    <table class="table" style="min-width:600px">
+     <thead><tr><th>SL NO</th><th>ENUMERATOR NAME</th><th>MOBILE NO</th></tr></thead>
+     <tbody>
+      \${d.rows.map(x=>\`
+       <tr><td>\${esc(x.sl_no)}</td><td><b>\${esc(x.name)}</b></td><td>\${esc(x.mobile)}</td></tr>
+      \`).join("")}
+     </tbody>
+    </table>
+   </div>\`;
+
+  $("reserveDownload").onclick=()=>window.location="/api/admin/export-reserve";
+ }catch(e){
+  $("reserve").innerHTML='<div class="error">'+esc(e.message)+'</div>';
+ }
+}
+
+async function loadFinal(){
+ try{
+  const d=await api("/api/admin/final-list");
+
+  $("final").innerHTML=\`
+   <div class="title">
+    <div>
+     <h2>🏆 Official Final List</h2>
+     <div class="sub">Official source values are displayed without editing • \${d.total} HLB assignment records</div>
+    </div>
+
+    <button id="finalDownload" class="btn green">📥 DOWNLOAD FINAL LIST</button>
+   </div>
+
+   <div class="field" style="margin-top:14px">
+    <label>SEARCH FINAL LIST</label>
+    <input id="finalFilter" placeholder="Search HLB, village, enumerator, supervisor or mobile" style="width:100%;padding:13px;border:1px solid #cbd8e7;border-radius:12px">
+   </div>
+
+   <div class="tablewrap">
+    <table class="table">
+     <thead>
+      <tr>
+       <th>HLB NO</th>
+       <th>SUPERVISORY CIRCLE</th>
+       <th>VILLAGE NAME</th>
+       <th>ENUMERATOR NAME</th>
+       <th>ENUMERATOR MOBILE</th>
+       <th>SUPERVISOR NAME</th>
+       <th>SUPERVISOR MOBILE</th>
+      </tr>
+     </thead>
+     <tbody id="finalBody"></tbody>
+    </table>
+   </div>\`;
+
+  function render(){
+   const q=$("finalFilter").value.trim().toLowerCase();
+
+   const rows=d.rows.filter(x=>[
+    x.hlb,x.village,x.enumerator,x.enumerator_mobile,x.supervisor,x.supervisor_mobile,x.circle
+   ].join(" ").toLowerCase().includes(q));
+
+   $("finalBody").innerHTML=rows.map(x=>\`
+    <tr>
+     <td><b>\${esc(x.hlb)}</b></td>
+     <td>\${esc(x.circle)}</td>
+     <td>\${esc(x.village)}</td>
+     <td>\${esc(x.enumerator)}</td>
+     <td>\${esc(x.enumerator_mobile)}</td>
+     <td>\${esc(x.supervisor)}</td>
+     <td>\${esc(x.supervisor_mobile)}</td>
+    </tr>
+   \`).join("");
+  }
+
+  $("finalFilter").addEventListener("input",render);
+  $("finalDownload").onclick=()=>window.location="/api/admin/export-final";
+  render();
+ }catch(e){
+  $("final").innerHTML='<div class="error">'+esc(e.message)+'</div>';
+ }
+}
+
+// Start with login. No admin data is rendered before authentication.
+loginPage();
+</script>
+</body>
+</html>`;
+}

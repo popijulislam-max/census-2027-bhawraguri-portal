@@ -1,0 +1,1 @@
+export async function onRequestPost(){return new Response(JSON.stringify({ok:true}),{headers:{'content-type':'application/json','Set-Cookie':'census_admin=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0'}})}

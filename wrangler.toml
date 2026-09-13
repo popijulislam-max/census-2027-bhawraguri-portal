@@ -1,0 +1,8 @@
+name = "census-2027-bhawraguri"
+compatibility_date = "2026-09-13"
+pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "census2027"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
