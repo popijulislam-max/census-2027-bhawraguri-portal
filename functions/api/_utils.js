@@ -7,3 +7,6 @@ export async function makeSession(username,secret){const payload=b64(JSON.string
 export async function isAdmin(req,env){const secret=env.ADMIN_SESSION_SECRET;if(!secret)return false;const cookie=req.headers.get('Cookie')||'';const token=cookie.match(/(?:^|;\s*)census_admin=([^;]+)/)?.[1];if(!token)return false;const [p,s]=token.split('.');if(!p||!s)return false;const good=await sig(p,secret);if(good!==s)return false;try{const x=JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(p.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0))));return x.t&&Date.now()-x.t<8*60*60*1000}catch{return false}}
 export function cookie(token){return `census_admin=${token}; Path=/; Max-Age=28800; HttpOnly; Secure; SameSite=Lax`}
 export const tableNames=['hlbs','enumerators','supervisors','reports','maps','indicators','gallery','notices','downloads','officers','technical_support','settings'];
+
+// Backward-compatible alias for legacy Pages Function routes.
+export const requireAdmin = isAdmin;
