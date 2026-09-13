@@ -4,5 +4,5 @@ pages_build_output_dir = "public"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "census2027"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_name = "census-2027-bhawraguri"
+database_id = "74aa711d-ebc8-4fde-bf65-223cab5bbf8e"
